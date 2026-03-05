@@ -17,7 +17,7 @@ GITEA_REPO="https://learn.zone01oujda.ma/git/iaboudou/${REPO_NAME}.git"
 
 BRANCH="${BRANCH:-main}"
 
-# helper
+# helper to add/set remote
 set_remote() {
   local name="$1" url="$2" curr
   curr=$(git remote get-url "$name" 2>/dev/null || true)
@@ -34,7 +34,7 @@ git config --global credential.helper store || true
 # ensure branch
 git checkout -B "$BRANCH"
 
-# commit if changes
+# commit if changes (use fixed author)
 if [ -n "$(git status --porcelain)" ]; then
   git add .
   git commit -m "$COMMIT_MSG" --author="$AUTHOR_NAME <$AUTHOR_EMAIL>"
@@ -43,12 +43,23 @@ else
   echo "ℹ️ No changes to commit"
 fi
 
-# configure remotes
+# configure remotes (add or update)
 set_remote github "$GITHUB_REPO"
 set_remote gitea "$GITEA_REPO"
 
-# force push both
+# force push to GitHub (this is required)
+echo "-> Pushing to GitHub ($GITHUB_REPO) ..."
 git push --force github "HEAD:$BRANCH"
-git push --force gitea "HEAD:$BRANCH"
+echo "✅ Forced push to GitHub done."
 
-echo "Done✅"
+# check if gitea URL is reachable before pushing
+echo "-> Checking Gitea repo availability..."
+if git ls-remote "$GITEA_REPO" &>/dev/null; then
+  echo "-> Gitea repo found, pushing (force) to Gitea ($GITEA_REPO) ..."
+  git push --force gitea "HEAD:$BRANCH"
+  echo "✅ Forced push to Gitea done."
+else
+  echo "⚠️ Gitea repo not reachable or does not exist. Skipping Gitea push."
+fi
+
+echo "Done ✅"
