@@ -47,19 +47,31 @@ fi
 set_remote github "$GITHUB_REPO"
 set_remote gitea "$GITEA_REPO"
 
-# force push to GitHub (this is required)
-echo "-> Pushing to GitHub ($GITHUB_REPO) ..."
-git push --force github "HEAD:$BRANCH"
-echo "✅ Forced push to GitHub done."
+# function to attempt push and continue on error
+attempt_push() {
+  local remote_name="$1"
+  local remote_url="$2"
+  local branch_ref="$3"
 
-# check if gitea URL is reachable before pushing
-echo "-> Checking Gitea repo availability..."
-if git ls-remote "$GITEA_REPO" &>/dev/null; then
-  echo "-> Gitea repo found, pushing (force) to Gitea ($GITEA_REPO) ..."
-  git push --force gitea "HEAD:$BRANCH"
-  echo "✅ Forced push to Gitea done."
-else
-  echo "⚠️ Gitea repo not reachable or does not exist. Skipping Gitea push."
-fi
+  echo "-> Pushing (force) to ${remote_name} (${remote_url}) ..."
+  set +e
+  git push --force "$remote_name" "$branch_ref"
+  rc=$?
+  set -e
 
-echo "Done ✅"
+  if [ $rc -ne 0 ]; then
+    echo "⚠️ Push to ${remote_name} failed (rc=$rc). Continuing..."
+    return 1
+  else
+    echo "✅ Forced push to ${remote_name} done."
+    return 0
+  fi
+}
+
+# try GitHub push first (don't fail whole script if it errors)
+attempt_push "github" "$GITHUB_REPO" "HEAD:$BRANCH" || true
+
+# try Gitea push, skip if unreachable or error
+attempt_push "gitea" "$GITEA_REPO" "HEAD:$BRANCH" || true
+
+echo "Finished. (script exits normally even if one push failed)"
